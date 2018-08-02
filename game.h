@@ -117,8 +117,6 @@ int initWindow()
 
 	if (GetConsoleScreenBufferInfo(hConsole, &csbi))
 	{
-		printf("\nMax Screen %d, %d", csbi.dwMaximumWindowSize.X, csbi.dwMaximumWindowSize.Y);
-
 		rectWindow = { 0, 0, (short)SCREEN_WIDTH - 1, (short)SCREEN_HEIGHT - 1 };
 		if (!SetConsoleWindowInfo(hConsole, TRUE, &rectWindow))
 			return -6;
@@ -149,6 +147,7 @@ int initWindow()
 		StartCounter();
 	}
 
+	printf("\nKitConsole Window Successful");
 	return 0;
 }
 
@@ -261,6 +260,8 @@ int run()
 
 		return result;
 	}
+
+	printf("\nKitConsole Audio Successful");
 #endif
 
 	HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
@@ -312,6 +313,10 @@ int run()
 
 	delete[] bufScreen;
 	delete[] prevBufScreen;
+
+#ifdef ENABLE_SOUND
+	shutdownAudio();
+#endif
 
 	return result;
 }
