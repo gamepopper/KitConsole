@@ -19,8 +19,6 @@
 float gameTime = 0;
 float updateTime = 0;
 
-void gamestate(float dt);
-
 enum COLOUR
 {
 	BLACK = 0x0000,
@@ -51,6 +49,48 @@ COORD mousePos;
 
 double PCFreq = 0.0;
 __int64 CounterStart = 0;
+
+enum EventType
+{
+	Null,
+	KeyPressed,
+	KeyReleased,
+	TextEntered,
+	MousePressed,
+	MouseReleased,
+	MouseMoved,
+	MouseWheel,
+	NumEvents
+};
+
+struct Event
+{
+	Event() :
+		type(EventType::Null),
+		key(-1),
+		button(255),
+		text(0),
+		shift(false),
+		ctrl(false),
+		alt(false),
+		doublePress(false)
+	{
+
+	}
+
+	short type;
+	//Key Events
+	short key;
+	char text;
+	bool shift;
+	bool ctrl;
+	bool alt;
+
+	//Mouse Events
+	char button;
+	COORD vel;
+	bool doublePress;
+};
 
 bool StartCounter()
 {
@@ -151,7 +191,7 @@ int initWindow()
 	return 0;
 }
 
-void handleInput()
+void handleInput(void(*handleEvent)(Event &e))
 {
 	for (unsigned int i = 0; i < 256; i++)
 	{
@@ -178,29 +218,112 @@ void handleInput()
 
 		case MOUSE_EVENT:
 		{
+			Event e;
+
 			switch (inBuf[i].Event.MouseEvent.dwEventFlags)
 			{
 			case MOUSE_MOVED:
 			{
+				if (mousePos.X != inBuf[i].Event.MouseEvent.dwMousePosition.X ||
+					mousePos.Y != inBuf[i].Event.MouseEvent.dwMousePosition.Y)
+				{
+					e.type = EventType::MouseMoved;
+					e.vel.X = inBuf[i].Event.MouseEvent.dwMousePosition.X - mousePos.X;
+					e.vel.Y = inBuf[i].Event.MouseEvent.dwMousePosition.Y - mousePos.Y;
+				}
+
 				mousePos.X = inBuf[i].Event.MouseEvent.dwMousePosition.X;
 				mousePos.Y = inBuf[i].Event.MouseEvent.dwMousePosition.Y;
+			}
+			break;
+
+			case DOUBLE_CLICK:
+			{
+				e.doublePress = true;
+				e.type = EventType::MousePressed;
+			}
+			break;
+
+			case MOUSE_WHEELED:
+			{
+				e.type = EventType::MouseWheel;
 			}
 			break;
 
 			default:
 				break;
 			}
+
+			if (handleEvent && e.type != EventType::Null)
+				handleEvent(e);
 		}
 		break;
 
+		case KEY_EVENT:
+		{
+			Event e;
+			if (inBuf[i].Event.KeyEvent.bKeyDown && !prevKeyState[inBuf[i].Event.KeyEvent.wVirtualKeyCode])
+			{
+				e.type = EventType::TextEntered;
+				e.text = inBuf[i].Event.KeyEvent.uChar.AsciiChar;
+
+				if (handleEvent && e.text)
+					handleEvent(e);
+
+				e.type = EventType::KeyPressed;
+				e.text = 0;
+			}
+			else if (!keyState[inBuf[i].Event.KeyEvent.wVirtualKeyCode])
+				e.type = EventType::KeyReleased;
+
+			e.key = inBuf[i].Event.KeyEvent.wVirtualKeyCode;
+			switch (e.key)
+			{
+			case VK_SHIFT:
+			case VK_CONTROL:
+			case VK_MENU:
+				break;
+			default:
+				e.alt = inBuf[i].Event.KeyEvent.dwControlKeyState & (RIGHT_ALT_PRESSED | LEFT_ALT_PRESSED);
+				e.ctrl = inBuf[i].Event.KeyEvent.dwControlKeyState & (RIGHT_CTRL_PRESSED | LEFT_CTRL_PRESSED);
+				e.shift = inBuf[i].Event.KeyEvent.dwControlKeyState & (SHIFT_PRESSED);
+			
+				if (handleEvent && e.type != EventType::Null)
+					handleEvent(e);
+				break;
+			}
+		}
+		break;
 		default:
 			break;
 			// We don't care just at the moment
 		}
 	}
+
+	for (int i = 1; i < 7; i++)
+	{
+		if (keyState[i] && !prevKeyState[i])
+		{
+			Event e;
+			e.type = EventType::MousePressed;
+			e.button = i - 1;
+
+				if (handleEvent)
+					handleEvent(e);
+		}
+		else if (!keyState[i] && prevKeyState[i])
+		{
+			Event e;
+			e.type = EventType::MouseReleased;
+			e.button = i - 1;
+
+			if (handleEvent)
+				handleEvent(e);
+		}
+	}
 }
 
-int run()
+int run(void(*gameloop)(float dt) = 0, void(*handleEvent)(Event &e) = 0)
 {
 	int result = 0;
 	if ((result = initWindow()) != 0)
@@ -285,13 +408,14 @@ int run()
 		gameTime += fElapsedTime;
 		updateTime += fElapsedTime;
 
-		handleInput();
-
 		if (updateTime > 1.0f / FPS)
 		{
+			handleInput(handleEvent);
+			
 			if (windowFocus)
 			{
-				gamestate(1.0f / FPS);
+				if (gameloop)
+					gameloop(1.0f / FPS);
 			}
 
 #ifdef ENABLE_SOUND

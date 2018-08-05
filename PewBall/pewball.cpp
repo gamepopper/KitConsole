@@ -12,7 +12,7 @@
 
 StateObject* state = NULL;
 
-void gamestate(float dt)
+void gameloop(float dt)
 {
 	if (currentState == GS_INIT)
 	{
@@ -89,5 +89,5 @@ int main()
 	printf("\n-- Gamepopper");
 	Sleep(5000);
 
-	return run();
+	return run(gameloop);
 }

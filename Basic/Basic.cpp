@@ -7,7 +7,7 @@
 //#define ENABLE_SOUND ///Optional define if a you want sound.
 #include <game.h>
 
-void gamestate(float dt) ///Game Loops are done in here. dt is the delta time between frames (1 / FPS).
+void gameloop(float dt) ///Game Loops are done in here. dt is the delta time between frames (1 / FPS).
 {
 	clearScreen();
 
@@ -86,5 +86,5 @@ void gamestate(float dt) ///Game Loops are done in here. dt is the delta time be
 
 int main()
 {
-	return run(); ///Initialises the console window for game use as well as run the game loop.
+	return run(gameloop); ///Initialises the console window for game use as well as run the game loop.
 }
