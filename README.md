@@ -17,16 +17,23 @@ Here is the boilerplate/minimum code needed to run an application using KitConso
 #define ENABLE_SOUND ///Optional define if a you want sound.
 #include <game.h>
 
-void gamestate(float dt) ///Game Loops are done in here. dt is the delta time between frames (1 / FPS).
+void gameloop(float dt) ///Game Loops are done in here, useful for real-time input and rendering behaviour. float dt is the delta time between frames (1 / FPS).
 {
 	
 }
 
+void handleEvent(Event &e) ///Actions are performed here if an event is to be processed, useful for event-based behaviour. Event &e is the current input to be processed. This function can be called more than once per frame.
+{
+
+}
+
 int main()
 {
-	return run(); ///Initialises the console window for game use as well as run the game loop.
+	return run(gameloop, handleEvent); ///Initialises the console window for game use as well as run the game loop and event handling.
 }
 ```
+
+You need to pass in either a gameloop or handleEvent function in order to do any rendering or audio processing. You can pass in 0 to one of the two parameters if you do not want to use one.
 
 As this is a header, you can access a lot of the games inner working, but here are the main properties and functions worth using in game.h:
 
@@ -61,6 +68,52 @@ void loadAudio(const char* name, unsigned int id); ///Loads a WAV or OGG file to
 void playAudio(int id, bool loop = false, float volume = 1.0f, float pitch = 1.0f, float pan = 0.5f, float delay = 0.0f); ///Plays audio file at specified ID, setting to loop, volume, pitch, pan and with delay.
 void stopAudio(int id); ///Stops an audio file at a specified ID.
 void freeAudio(int id); //Frees an audio file at a specified ID, making the ID free to use a different audio file.
+```
+
+If you want to use Event-based Input, here is the important stuff.
+
+```
+enum EventType
+{
+	Null,
+	KeyPressed,
+	KeyReleased,
+	TextEntered,
+	MousePressed,
+	MouseReleased,
+	MouseMoved,
+	MouseWheel,
+	NumEvents
+};
+
+struct Event
+{
+	Event() :
+		type(EventType::Null),
+		key(-1),
+		button(255),
+		text(0),
+		shift(false),
+		ctrl(false),
+		alt(false),
+		doublePress(false)
+	{
+
+	}
+
+	short type;
+	//Key Events
+	short key;
+	char text;
+	bool shift;
+	bool ctrl;
+	bool alt;
+
+	//Mouse Events
+	char button;
+	COORD vel;
+	bool doublePress;
+};
 ```
 
 ## Future Features
