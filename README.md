@@ -1,7 +1,7 @@
 # KitConsole
 KitConsole is a tiny engine made for FloppyJam to create a game that could render to the Windows Command Prompt, as well as load and play audio files (.wav and .ogg).
 
-It's written for use in C/C++ to be mostly header only.
+This library was written for use in C/C++ to be mostly header only. A lot of it was inspired by an engine written by [OneLoneCoder](https://www.youtube.com/watch?v=cWc0hgYwZyc&feature=youtu.be).
 
 ## Usage
 
