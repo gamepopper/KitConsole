@@ -1,6 +1,35 @@
 #pragma once
+
+#ifdef WIN32
+#define KITCONSOLE_WINDOWS
+#endif
+
+#ifdef KITCONSOLE_WINDOWS
 #include <Windows.h>
-#include <stdlib.h> // for srand() / rand()
+#else
+typedef struct _CHAR_INFO {
+	union {
+		wchar_t UnicodeChar;
+		char   AsciiChar;
+	} Char;
+	unsigned short Attributes;
+} CHAR_INFO, *PCHAR_INFO;
+
+typedef struct _COORD
+{
+	short X;
+	short Y;
+} COORD;
+
+typedef struct _SMALL_RECT {
+	short Left;
+	short Top;
+	short Right;
+	short Bottom;
+} SMALL_RECT, *PSMALL_RECT;
+#endif
+
+#include <stdlib.h>
 #include <stdio.h>
 #include <time.h>
 #include "math.h"
@@ -68,12 +97,13 @@ struct Event
 	Event() :
 		type(EventType::Null),
 		key(-1),
-		button(255),
+		button(-1),
 		text(0),
 		shift(false),
 		ctrl(false),
 		alt(false),
-		doublePress(false)
+		doublePress(false),
+		vel()
 	{
 
 	}
@@ -114,21 +144,67 @@ float GetCounterNanoseconds()
 
 float GetCounterMilliseconds()
 {
-	LARGE_INTEGER li;
-	QueryPerformanceCounter(&li);
 	return GetCounterNanoseconds() * 1000.f;
 }
 
 SYSTEMTIME stime;
 LARGE_INTEGER sys_freq;
 
-BOOL ctrl_handler(DWORD event)
+bool ctrl_handler(unsigned long event)
 {
 	if (event == CTRL_CLOSE_EVENT) {
 		windowActive = false;
 		return TRUE;
 	}
 	return FALSE;
+}
+
+short getPrevChar(int x, int y)
+{
+	if (x < 0 || y < 0 || x >= SCREEN_WIDTH || y >= SCREEN_HEIGHT)
+		return 0;
+
+	return prevBufScreen[y * SCREEN_WIDTH + x].Char.UnicodeChar;
+}
+
+short getCurrentChar(int x, int y)
+{
+	if (x < 0 || y < 0 || x >= SCREEN_WIDTH || y >= SCREEN_HEIGHT)
+		return 0;
+
+	return bufScreen[y * SCREEN_WIDTH + x].Char.UnicodeChar;
+}
+
+short getPrevFColour(int x, int y)
+{
+	if (x < 0 || y < 0 || x >= SCREEN_WIDTH || y >= SCREEN_HEIGHT)
+		return 0;
+
+	return prevBufScreen[y * SCREEN_WIDTH + x].Attributes % 16;
+}
+
+short getCurrentFColour(int x, int y)
+{
+	if (x < 0 || y < 0 || x >= SCREEN_WIDTH || y >= SCREEN_HEIGHT)
+		return 0;
+
+	return bufScreen[y * SCREEN_WIDTH + x].Attributes % 16;
+}
+
+short getPrevBColour(int x, int y)
+{
+	if (x < 0 || y < 0 || x >= SCREEN_WIDTH || y >= SCREEN_HEIGHT)
+		return 0;
+
+	return prevBufScreen[y * SCREEN_WIDTH + x].Attributes / 16;
+}
+
+short getCurrentBColour(int x, int y)
+{
+	if (x < 0 || y < 0 || x >= SCREEN_WIDTH || y >= SCREEN_HEIGHT)
+		return 0;
+
+	return bufScreen[y * SCREEN_WIDTH + x].Attributes / 16;
 }
 
 int initWindow()
@@ -140,7 +216,7 @@ int initWindow()
 	if (!GetConsoleScreenBufferInfo(hConsole, &csbi))
 		return -1;
 
-	SMALL_RECT rectWindow = { 0, 0, 1, 1 };
+	SMALL_RECT rectWindow = { 0, 0, 79, 59 };
 	SetConsoleWindowInfo(hConsole, TRUE, &rectWindow);
 
 	COORD coord = { (short)SCREEN_WIDTH, (short)SCREEN_HEIGHT };
@@ -150,10 +226,10 @@ int initWindow()
 	if (!SetConsoleActiveScreenBuffer(hConsole))
 		return -3;
 
-	/*if (SCREEN_HEIGHT > csbi.dwMaximumWindowSize.Y)
+	if (SCREEN_HEIGHT - 1 > csbi.dwMaximumWindowSize.Y)
 		return -4;
-	if (SCREEN_WIDTH > csbi.dwMaximumWindowSize.X)
-		return -5;*/
+	if (SCREEN_WIDTH - 1 > csbi.dwMaximumWindowSize.X)
+		return -5;
 
 	if (GetConsoleScreenBufferInfo(hConsole, &csbi))
 	{
@@ -329,7 +405,6 @@ int run(void(*gameloop)(float dt) = 0, void(*handleEvent)(Event &e) = 0)
 	if ((result = initWindow()) != 0)
 	{
 		LPVOID lpMsgBuf;
-		LPVOID lpDisplayBuf;
 		DWORD dw = GetLastError();
 
 		FormatMessage(
@@ -342,8 +417,8 @@ int run(void(*gameloop)(float dt) = 0, void(*handleEvent)(Event &e) = 0)
 			(LPTSTR)&lpMsgBuf,
 			0, NULL);
 
-		FILE *f = fopen("error.txt", "w");
-		if (f == NULL)
+		FILE* f;
+		if (fopen_s(&f, "error.txt", "w") != 0)
 		{
 			printf("Error opening file!\n");
 			exit(1);
@@ -361,7 +436,7 @@ int run(void(*gameloop)(float dt) = 0, void(*handleEvent)(Event &e) = 0)
 			"SetCurrentConsoleFontEx(hConsole, false, &cfi)",
 		};
 
-		fprintf(f, "Game %s crashed at \"%s\" with the system error (%d): %s", GAME_NAME, point[-result], dw, lpMsgBuf);
+		fprintf(f, "Game %s crashed at \"%s\" with the system error (%d): %s", GAME_NAME, point[-result], dw, (LPTSTR)lpMsgBuf);
 
 		fclose(f);
 		return result;
@@ -370,8 +445,8 @@ int run(void(*gameloop)(float dt) = 0, void(*handleEvent)(Event &e) = 0)
 #ifdef ENABLE_SOUND
 	if ((result = initAudio()) != 0)
 	{
-		FILE *f = fopen("error.txt", "w");
-		if (f == NULL)
+		FILE* f;
+		if (fopen_s(&f, "error.txt", "w") != 0)
 		{
 			printf("Error opening file!\n");
 			exit(1);
@@ -387,7 +462,6 @@ int run(void(*gameloop)(float dt) = 0, void(*handleEvent)(Event &e) = 0)
 	printf("\nKitConsole Audio Successful");
 #endif
 
-	HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
 	SMALL_RECT rectWindow = { 0, 0, (short)SCREEN_WIDTH - 1, (short)SCREEN_HEIGHT - 1 };
 
 	bufScreen = new CHAR_INFO[SCREEN_WIDTH*SCREEN_HEIGHT];
@@ -396,7 +470,9 @@ int run(void(*gameloop)(float dt) = 0, void(*handleEvent)(Event &e) = 0)
 
 	float tp1 = GetCounterMilliseconds() / 1000.0f, tp2 = tp1;
 
+#ifdef KITCONSOLE_WINDOWS
 	SetConsoleTitle(GAME_NAME);
+#endif
 
 	while (windowActive)
 	{
@@ -429,7 +505,67 @@ int run(void(*gameloop)(float dt) = 0, void(*handleEvent)(Event &e) = 0)
 			}
 
 			if (windowFocus)
+			{
+			#ifdef KITCONSOLE_WINDOWS
+				HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
 				WriteConsoleOutput(hConsole, bufScreen, { (short)SCREEN_WIDTH, (short)SCREEN_HEIGHT }, { 0,0 }, &rectWindow);
+			#else
+				printf("%s", "\033[2J\033[3J");
+				printf("%s", "\033]0;");
+
+				const char* foreColours[] =
+				{
+					"\033[22;30m",
+					"\033[01;34m",
+					"\033[01;32m",
+					"\033[01;36m",
+					"\033[01;31m",
+					"\033[01;35m",
+					"\033[01;33m",
+					"\033[22;37m",
+					"\033[01;30m",
+					"\033[22;34m",
+					"\033[22;32m",
+					"\033[22;36m",
+					"\033[22;31m",
+					"\033[22;35m",
+					"\033[22;33m",
+					"\033[01;37m",
+				};
+
+				const char* backColours[] = 
+				{
+					"\033[40m",
+					"\033[44m",
+					"\033[42m",
+					"\033[46m",
+					"\033[41m",
+					"\033[45m",
+					"\033[43m",
+					"\033[47m",
+					"\033[40m",
+					"\033[44m",
+					"\033[42m",
+					"\033[46m",
+					"\033[41m",
+					"\033[45m",
+					"\033[43m",
+					"\033[47m",
+				};
+
+				for (int y = 0; y < SCREEN_HEIGHT; y++)
+				{
+					for (int x = 0; x < SCREEN_WIDTH; x++)
+					{
+						printf("%c", (char)getCurrentChar(x, y));
+						/*printf("%s", foreColours[getCurrentFColour(x, y)]);
+						printf("%s", backColours[getCurrentBColour(x, y)]);*/
+					}
+
+					printf("\n");
+				}
+			#endif
+			}
 		}
 
 		memcpy(prevBufScreen, bufScreen, sizeof(CHAR_INFO) * SCREEN_WIDTH * SCREEN_HEIGHT);
@@ -443,54 +579,6 @@ int run(void(*gameloop)(float dt) = 0, void(*handleEvent)(Event &e) = 0)
 #endif
 
 	return result;
-}
-
-short getPrevChar(int x, int y)
-{
-	if (x < 0 || y < 0 || x >= SCREEN_WIDTH || y >= SCREEN_HEIGHT)
-		return 0;
-
-	return prevBufScreen[y * SCREEN_WIDTH + x].Char.UnicodeChar;
-}
-
-short getCurrentChar(int x, int y)
-{
-	if (x < 0 || y < 0 || x >= SCREEN_WIDTH || y >= SCREEN_HEIGHT)
-		return 0;
-
-	return bufScreen[y * SCREEN_WIDTH + x].Char.UnicodeChar;
-}
-
-short getPrevFColour(int x, int y)
-{
-	if (x < 0 || y < 0 || x >= SCREEN_WIDTH || y >= SCREEN_HEIGHT)
-		return 0;
-
-	return prevBufScreen[y * SCREEN_WIDTH + x].Attributes % 16;
-}
-
-short getCurrentFColour(int x, int y)
-{
-	if (x < 0 || y < 0 || x >= SCREEN_WIDTH || y >= SCREEN_HEIGHT)
-		return 0;
-
-	return bufScreen[y * SCREEN_WIDTH + x].Attributes % 16;
-}
-
-short getPrevBColour(int x, int y)
-{
-	if (x < 0 || y < 0 || x >= SCREEN_WIDTH || y >= SCREEN_HEIGHT)
-		return 0;
-
-	return prevBufScreen[y * SCREEN_WIDTH + x].Attributes / 16;
-}
-
-short getCurrentBColour(int x, int y)
-{
-	if (x < 0 || y < 0 || x >= SCREEN_WIDTH || y >= SCREEN_HEIGHT)
-		return 0;
-
-	return bufScreen[y * SCREEN_WIDTH + x].Attributes / 16;
 }
 
 void drawChar(int x, int y, short c, int color, int bgColor = 0)
